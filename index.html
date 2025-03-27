@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <title>0 Solves Goal</title>
+  </head>
+  <body>
+    <main class="bg-emerald-900 h-screen text-white px-3">
+      <div class="flex flex-row-reverse text-6xl font-bold" id="solves-count">
+        0
+      </div>
+      <div class="flex flex-row-reverse text-md font-medium">
+        <div class="flex flex-col space-y-2">
+          <div>solves goal</div>
+        </div>
+      </div>
+    </main>
+    <script>
+      // API endpoint
+      const API_URL = "https://api.solves.scharl.dev";
+
+      // Function to fetch data from the API
+      async function fetchSolvesData() {
+        // Define parameters
+        const params = {
+          solvesPerHourGoal: 2.5,
+          startTime: 9.5,
+          endTime: 18,
+          workdays: [1, 2, 3, 4, 5],
+          utcOffset: -4, // Updated to UTC-4 for Daylight Saving Time
+        };
+
+        // Convert parameters to URL query string
+        const queryString = Object.entries(params)
+          .map(([key, value]) => {
+            if (Array.isArray(value)) {
+              return `${key}=${value.join(",")}`;
+            }
+            return `${key}=${value}`;
+          })
+          .join("&");
+
+        // Make API request
+        try {
+          const response = await fetch(`${API_URL}?${queryString}`);
+          if (!response.ok) {
+            throw new Error(
+              `API request failed with status: ${response.status}`
+            );
+          }
+
+          const data = await response.json();
+          return data;
+        } catch (error) {
+          console.error("Error fetching solves data:", error);
+          // Fallback to local calculation
+          return { paceResults: calcPace(params) };
+        }
+      }
+
+      // Legacy calculation function (as fallback)
+      function calcPace({
+        solvesPerHourGoal = 2.5,
+        startTime = 9.5,
+        endTime = 18,
+        workdays = [1, 2, 3, 4, 5],
+        utcOffset = -4, // Hours difference from UTC (updated for EDT)
+      }) {
+        const workingHours = endTime - startTime - 1; // two 15 min breaks + 30 min lunch
+        const dailySolveGoal = Math.ceil(solvesPerHourGoal * workingHours);
+
+        // Get current date and time (in local timezone)
+        const now = new Date();
+
+        // First convert to UTC by removing the local timezone offset
+        // Then apply the desired UTC offset
+        const adjustedTime = new Date(
+          now.getTime() +
+            utcOffset * 60 * 60 * 1000 +
+            now.getTimezoneOffset() * 60 * 1000
+        );
+
+        const currentDay = adjustedTime.getDay();
+        const isWorkingDay = workdays.includes(currentDay);
+        const currentTime =
+          adjustedTime.getHours() + adjustedTime.getMinutes() / 60;
+
+        // Calculate today's progress - capped at workingHours
+        let todayElapsedHours = Math.min(
+          workingHours,
+          Math.max(0, currentTime - startTime)
+        );
+        let dailyPace = 0;
+
+        if (isWorkingDay) {
+          if (currentTime >= endTime) {
+            // Past end time on a workday
+            todayElapsedHours = workingHours;
+            dailyPace = dailySolveGoal;
+          } else if (currentTime > startTime) {
+            // During work hours
+            dailyPace = Math.ceil(todayElapsedHours * solvesPerHourGoal);
+          }
+        }
+
+        // Calculate week's progress
+        // Count how many full workdays have passed this week
+        const pastWorkdaysThisWeek = workdays.filter(
+          (day) => day < currentDay
+        ).length;
+        const weeklyElapsedHours =
+          pastWorkdaysThisWeek * workingHours + todayElapsedHours;
+
+        // Weekly pace should be the completed days' goal plus today's pace
+        const completedDaysGoal = pastWorkdaysThisWeek * dailySolveGoal;
+        const weeklyPace = completedDaysGoal + dailyPace;
+
+        return {
+          todayElapsedHours,
+          dailyPace,
+          weeklyElapsedHours,
+          weeklyPace,
+          currentTime, // Added for debugging
+          isWorkingDay, // Added for debugging
+        };
+      }
+
+      async function updateSolvesDisplay() {
+        // Fetch data from API
+        const data = await fetchSolvesData();
+        const pace = data.paceResults;
+
+        // Define parameters for local logic
+        const params = {
+          solvesPerHourGoal: 2.5,
+          startTime: 9.5,
+          endTime: 18,
+          workdays: [1, 2, 3, 4, 5],
+          utcOffset: -4, // Updated to UTC-4 for Daylight Saving Time
+        };
+
+        // Always display the weekly pace value regardless of working hours
+        const displayValue = pace.weeklyPace;
+
+        // Update the display on the page
+        const solvesCount = document.getElementById("solves-count");
+        solvesCount.textContent = displayValue;
+
+        // Update the title
+        document.title = `${displayValue} Solves Goal`;
+
+        // Log data for debugging
+        console.log("API Response:", data);
+      }
+
+      // Immediately invoke the fetch and update on page load
+      (async function () {
+        // Immediate first fetch
+        await updateSolvesDisplay();
+
+        // Then set up the interval for subsequent fetches
+        setInterval(updateSolvesDisplay, 60000);
+      })();
+    </script>
+  </body>
+</html>
