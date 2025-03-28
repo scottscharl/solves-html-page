@@ -13,8 +13,11 @@
       </div>
       <div class="flex flex-row-reverse text-md font-medium">
         <div class="flex flex-col space-y-2">
-          <div>solves goal</div>
+          <div>solves pace</div>
         </div>
+      </div>
+      <div class="flex flex-row-reverse text-sm text-gray-300 mt-2">
+        <div id="weekly-goal">weekly goal: 0</div>
       </div>
     </main>
     <script>
@@ -25,7 +28,7 @@
       async function fetchSolvesData() {
         // Define parameters
         const params = {
-          solvesPerHourGoal: 2.3,
+          solvesPerHourGoal: 2.5,
           startTime: 9.5,
           endTime: 18,
           workdays: [1, 2, 3, 4, 5],
@@ -70,6 +73,7 @@
       }) {
         const workingHours = endTime - startTime - 1; // two 15 min breaks + 30 min lunch
         const dailySolveGoal = Math.ceil(solvesPerHourGoal * workingHours);
+        const weeklySolveGoal = dailySolveGoal * workdays.length;
 
         // Get current date and time (in local timezone)
         const now = new Date();
@@ -120,6 +124,8 @@
         return {
           todayElapsedHours,
           dailyPace,
+          dailySolveGoal,
+          weeklySolveGoal,
           weeklyElapsedHours,
           weeklyPace,
           currentTime, // Added for debugging
@@ -143,13 +149,18 @@
 
         // Always display the weekly pace value regardless of working hours
         const displayValue = pace.weeklyPace;
+        const weeklyGoal = pace.weeklySolveGoal;
 
         // Update the display on the page
         const solvesCount = document.getElementById("solves-count");
         solvesCount.textContent = displayValue;
 
+        // Update weekly goal display
+        const weeklyGoalElement = document.getElementById("weekly-goal");
+        weeklyGoalElement.textContent = `weekly goal: ${weeklyGoal}`;
+
         // Update the title
-        document.title = `${displayValue} Solves Goal`;
+        document.title = `${displayValue} Solves Pace`;
 
         // Log data for debugging
         console.log("API Response:", data);
